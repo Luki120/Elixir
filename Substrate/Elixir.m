@@ -1,12 +1,9 @@
 @import UIKit;
+#import <dlfcn.h>
 #import <substrate.h>
 #import <Preferences/PSSpecifier.h>
 #import <Preferences/PSListController.h>
 
-
-// Global
-
-UIViewController *ancestor;
 
 #define isCurrentApp(string) [[[NSBundle mainBundle] bundleIdentifier] isEqual : string]
 
@@ -16,16 +13,20 @@ UIViewController *ancestor;
 @end
 
 
+@interface PSUIPrefsListController : PSListController
+@end
+
+
 @interface TSRootListController : UIViewController
 @property (copy, nonatomic) NSString *title;
 @end
+
 
 @interface AMightyClass : UIView
 @property (nonatomic, strong) UILabel *tweakCount;
 @property (copy, nonatomic) NSString *bundlePath;
 @property (nonatomic, strong) NSArray *directoryContent;
-@property (nonatomic) int elixirTweakCount;
-@property (nonatomic, strong) NSFileManager *fileM;
+@property (assign, nonatomic) int elixirTweakCount;
 @end
 
 
@@ -52,10 +53,10 @@ UIViewController *ancestor;
 
 	self = [super init];
 
-	self.fileM = [NSFileManager defaultManager];
+	NSFileManager *fileM = [NSFileManager defaultManager];
 
 	self.bundlePath = @"/Library/PreferenceLoader/Preferences";
-	self.directoryContent = [self.fileM contentsOfDirectoryAtPath:self.bundlePath error:nil];
+	self.directoryContent = [fileM contentsOfDirectoryAtPath:self.bundlePath error:nil];
 	self.elixirTweakCount = [self.directoryContent count];
 
 	[self setupElixirLabel];
@@ -84,7 +85,7 @@ void newDidMoveToWindow(UITableView *self, SEL _cmd) {
 
 	origDidMoveToWindow(self, _cmd);
 
-	ancestor = [self _viewControllerForAncestor];
+	UIViewController *ancestor = [self _viewControllerForAncestor];
 
 	if([ancestor isKindOfClass:NSClassFromString(@"OrionTweakSpecifiersController")]) {
 
@@ -107,7 +108,7 @@ void newDidMoveToWindow(UITableView *self, SEL _cmd) {
 		self.tableFooterView = footerView;
 
 		[[AMightyClass sharedInstance].tweakCount.centerXAnchor constraintEqualToAnchor : footerView.centerXAnchor].active = YES;
-		[[AMightyClass sharedInstance].tweakCount.centerYAnchor constraintEqualToAnchor : footerView.centerYAnchor constant : 4].active = YES;
+		[[AMightyClass sharedInstance].tweakCount.centerYAnchor constraintEqualToAnchor : footerView.centerYAnchor constant : -4].active = YES;
 
 	}
 
@@ -143,28 +144,17 @@ void overrideViewDidLoad(TSRootListController *self, SEL _cmd) {
 
 }
 
+void (*origVDL)(PSUIPrefsListController *self, SEL _cmd);
 
-BOOL new_PSListController_areOrionOrShuffleInstalled(PSListController *self, SEL _cmd) {
-
-	return (NSClassFromString(@"OrionTweakSpecifiersController") || NSClassFromString(@"TweakPreferencesListController"));
-
-}
-
-
-void (*origVDL)(PSListController *self, SEL _cmd);
-
-void overrideVDL(PSListController *self, SEL _cmd) {
+void overrideVDL(PSUIPrefsListController *self, SEL _cmd) {
 
 	origVDL(self, _cmd);
-
-	if(new_PSListController_areOrionOrShuffleInstalled(self, _cmd)) return;
-
-	if(![self isMemberOfClass:NSClassFromString(@"PSUIPrefsListController")]) return;
 
 	PSSpecifier *emptySpecifier = [PSSpecifier emptyGroupSpecifier];
 
 	NSString *elixirTweakCountLabel = [NSString stringWithFormat:@"%d Tweaks", [AMightyClass sharedInstance].elixirTweakCount];
-	PSSpecifier *elixirSpecifier = [PSSpecifier preferenceSpecifierNamed:elixirTweakCountLabel target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
+	PSSpecifier *elixirSpecifier = [PSSpecifier preferenceSpecifierNamed:elixirTweakCountLabel target:self set:nil get:nil detail:nil cell:PSStaticTextCell edit:nil];
+	[elixirSpecifier setProperty:@YES forKey:@"enabled"];
 	[self insertContiguousSpecifiers:@[emptySpecifier, elixirSpecifier] afterSpecifier:[self specifierForID:@"APPLE_ACCOUNT"]];
 
 
@@ -173,18 +163,13 @@ void overrideVDL(PSListController *self, SEL _cmd) {
 
 __attribute__((constructor)) static void init() {
 
-	MSHookMessageEx(NSClassFromString(@"UITableView"), @selector(didMoveToWindow), (IMP) &newDidMoveToWindow, (IMP*) &origDidMoveToWindow);
 	MSHookMessageEx(NSClassFromString(@"UITableView"), @selector(traitCollectionDidChange:), (IMP) &newTraitCollection, (IMP*) &origTraitCollection);
 	MSHookMessageEx(NSClassFromString(@"TSRootListController"), @selector(viewDidLoad), (IMP) &overrideViewDidLoad, (IMP*) &origViewDidLoad);
-	MSHookMessageEx(NSClassFromString(@"PSListController"), @selector(viewDidLoad), (IMP) &overrideVDL, (IMP*) &origVDL);
 
-	class_addMethod (
-		
-		NSClassFromString(@"PSListController"),
-		@selector(areOrionOrShuffleInstalled),
-		(IMP)&new_PSListController_areOrionOrShuffleInstalled,
-		"B@:"
+	if(dlopen("/Library/MobileSubstrate/DynamicLibraries/OrionSettings.dylib", RTLD_LAZY) != NULL || dlopen("/Library/MobileSubstrate/DynamicLibraries/shuffle.dylib", RTLD_LAZY) != NULL)
 
-	);
+		MSHookMessageEx(NSClassFromString(@"UITableView"), @selector(didMoveToWindow), (IMP) &newDidMoveToWindow, (IMP*) &origDidMoveToWindow);
+
+	else MSHookMessageEx(NSClassFromString(@"PSUIPrefsListController"), @selector(viewDidLoad), (IMP) &overrideVDL, (IMP*) &origVDL);
 
 }
