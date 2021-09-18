@@ -113,7 +113,7 @@ UIViewController *ancestor;
 	else if([ancestor isKindOfClass:%c(TweakPreferencesListController)]) { // Shuffle has a search bar so no space at the top :thishowitis:
 
 		UIView *fuckingFooterView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, UIScreen.mainScreen.bounds.size.width, 10)];
-		[fuckingFooterView addSubview:self.tweakCount];
+		[fuckingFooterView addSubview:[AMightyClass sharedInstance].tweakCount];
 
 		self.tableFooterView = fuckingFooterView;
 
