@@ -1,17 +1,13 @@
 @import UIKit;
+#import <dlfcn.h>
 #import <Preferences/PSSpecifier.h>
 #import <Preferences/PSListController.h>
 
 
-// Global
-
-UIViewController *ancestor;
-
 #define isCurrentApp(string) [[[NSBundle mainBundle] bundleIdentifier] isEqual : string]
 
 
-@interface PSListController ()
-- (BOOL)areOrionOrShuffleInstalled;
+@interface PSUIPrefsListController : PSListController
 @end
 
 
@@ -30,8 +26,7 @@ UIViewController *ancestor;
 @property (nonatomic, strong) UILabel *tweakCount;
 @property (copy, nonatomic) NSString *bundlePath;
 @property (nonatomic, strong) NSArray *directoryContent;
-@property (nonatomic) int elixirTweakCount;
-@property (nonatomic, strong) NSFileManager *fileM;
+@property (assign, nonatomic) int elixirTweakCount;
 @end
 
 
@@ -58,10 +53,10 @@ UIViewController *ancestor;
 
 	self = [super init];
 
-	self.fileM = [NSFileManager defaultManager];
+	NSFileManager *fileM = [NSFileManager defaultManager];
 
 	self.bundlePath = @"/Library/PreferenceLoader/Preferences";
-	self.directoryContent = [self.fileM contentsOfDirectoryAtPath:self.bundlePath error:nil];
+	self.directoryContent = [fileM contentsOfDirectoryAtPath:self.bundlePath error:nil];
 	self.elixirTweakCount = [self.directoryContent count];
 
 	[self setupElixirLabel];
@@ -84,6 +79,9 @@ UIViewController *ancestor;
 @end
 
 
+%group ElixirPrefsOrganizers
+
+
 %hook UITableView
 
 
@@ -95,7 +93,7 @@ UIViewController *ancestor;
 
 	%orig;
 
-	ancestor = [self _viewControllerForAncestor];
+	UIViewController *ancestor = [self _viewControllerForAncestor];
 
 	if([ancestor isKindOfClass:%c(OrionTweakSpecifiersController)]) {
 
@@ -120,7 +118,6 @@ UIViewController *ancestor;
 		[[AMightyClass sharedInstance].tweakCount.centerXAnchor constraintEqualToAnchor : fuckingFooterView.centerXAnchor].active = YES;
 		[[AMightyClass sharedInstance].tweakCount.centerYAnchor constraintEqualToAnchor : fuckingFooterView.centerYAnchor constant : 4].active = YES;
 
-
 	}
 
 }
@@ -142,8 +139,10 @@ UIViewController *ancestor;
 
 
 %end
+%end
 
 
+%group Elixir
 
 
 %hook TSRootListController
@@ -167,7 +166,7 @@ UIViewController *ancestor;
 
 
 
-%hook PSListController
+%hook PSUIPrefsListController
 
 
 - (void)viewDidLoad { // support for normal preferences
@@ -175,29 +174,30 @@ UIViewController *ancestor;
 
 	%orig;
 
-	if([self areOrionOrShuffleInstalled]) return;
-
-	if(![self isMemberOfClass:%c(PSUIPrefsListController)]) return;
-
 	PSSpecifier *emptySpecifier = [PSSpecifier emptyGroupSpecifier];
 
 	NSString *elixirTweakCountLabel = [NSString stringWithFormat:@"%d Tweaks", [AMightyClass sharedInstance].elixirTweakCount];
-	PSSpecifier *elixirSpecifier = [PSSpecifier preferenceSpecifierNamed:elixirTweakCountLabel target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
+	PSSpecifier *elixirSpecifier = [PSSpecifier preferenceSpecifierNamed:elixirTweakCountLabel target:self set:nil get:nil detail:nil cell:PSStaticTextCell edit:nil];
+	[elixirSpecifier setProperty:@YES forKey:@"enabled"];	
 	[self insertContiguousSpecifiers:@[emptySpecifier, elixirSpecifier] afterSpecifier:[self specifierForID:@"APPLE_ACCOUNT"]];
 
 
 }
 
 
-%new
+%end
+%end
 
-- (BOOL)areOrionOrShuffleInstalled {
+
+%ctor {
 
 
-	return (%c(OrionTweakSpecifiersController) || %c(TweakPreferencesListController));
+	if(dlopen("/Library/MobileSubstrate/DynamicLibraries/OrionSettings.dylib", RTLD_LAZY) != NULL || dlopen("/Library/MobileSubstrate/DynamicLibraries/shuffle.dylib", RTLD_LAZY) != NULL)
 
+		%init(ElixirPrefsOrganizers);
+
+	else
+
+		%init(Elixir);
 
 }
-
-
-%end
