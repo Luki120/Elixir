@@ -4,6 +4,7 @@
 #import <Preferences/PSListController.h>
 
 
+#define Class(string) NSClassFromString(string)
 #define isCurrentApp(string) [[[NSBundle mainBundle] bundleIdentifier] isEqual : string]
 
 
@@ -24,13 +25,16 @@
 
 @interface AMightyClass : UIView
 @property (nonatomic, strong) UILabel *tweakCount;
-@property (copy, nonatomic) NSString *bundlePath;
-@property (nonatomic, strong) NSArray *directoryContent;
 @property (assign, nonatomic) int elixirTweakCount;
 @end
 
 
-@implementation AMightyClass // fancy way to avoid code duplication, haha thanks Codine. But properties >> iVars
+@implementation AMightyClass { // fancy way to avoid code duplication, haha thanks Codine.
+
+	NSString *bundlePath;
+	NSArray *directoryContent;
+
+}
 
 
 + (AMightyClass *)sharedInstance {
@@ -40,7 +44,7 @@
 
 	dispatch_once(&onceToken, ^{
 		
-		sharedInstance = [AMightyClass new];
+		sharedInstance = [self new];
 
 	});
 
@@ -49,17 +53,21 @@
 }
 
 
-- (instancetype)init {
+- (id)init {
 
 	self = [super init];
 
-	NSFileManager *fileM = [NSFileManager defaultManager];
+	if(self) {
 
-	self.bundlePath = @"/Library/PreferenceLoader/Preferences";
-	self.directoryContent = [fileM contentsOfDirectoryAtPath:self.bundlePath error:nil];
-	self.elixirTweakCount = [self.directoryContent count];
+		NSFileManager *fileM = [NSFileManager defaultManager];
 
-	[self setupElixirLabel];
+		bundlePath = @"/Library/PreferenceLoader/Preferences";
+		directoryContent = [fileM contentsOfDirectoryAtPath:bundlePath error:nil];
+		self.elixirTweakCount = [directoryContent count];
+
+		[self setupElixirLabel];
+
+	}
 
 	return self;
 
@@ -71,6 +79,7 @@
 	self.tweakCount = [UILabel new];
 	self.tweakCount.text = [NSString stringWithFormat:@"%d", self.elixirTweakCount];
 	self.tweakCount.font = [UIFont boldSystemFontOfSize:18];
+	self.tweakCount.textColor = UIColor.labelColor;
 	self.tweakCount.translatesAutoresizingMaskIntoConstraints = NO;
 
 }
@@ -89,7 +98,6 @@
 
 
 - (void)didMoveToWindow { // support for preference organizers tweaks
-
 
 	%orig;
 
@@ -123,21 +131,6 @@
 }
 
 
-- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
-
- 
-	%orig;
-
-	if(self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) 
-
-		[AMightyClass sharedInstance].tweakCount.textColor = UIColor.whiteColor;
-
-	else [AMightyClass sharedInstance].tweakCount.textColor = UIColor.blackColor;
-
-
-}
-
-
 %end
 %end
 
@@ -150,13 +143,11 @@
 
 - (void)viewDidLoad { // support for Tweak Settings app
 
-
 	%orig;
 
 	if(!(isCurrentApp(@"com.creaturecoding.tweaksettings"))) return;
 
 	self.title = [NSString stringWithFormat:@"%d", [AMightyClass sharedInstance].elixirTweakCount];
-
 
 }
 
@@ -171,7 +162,6 @@
 
 - (void)viewDidLoad { // support for normal preferences
 
-
 	%orig;
 
 	PSSpecifier *emptySpecifier = [PSSpecifier emptyGroupSpecifier];
@@ -180,7 +170,6 @@
 	PSSpecifier *elixirSpecifier = [PSSpecifier preferenceSpecifierNamed:elixirTweakCountLabel target:self set:nil get:nil detail:nil cell:PSStaticTextCell edit:nil];
 	[elixirSpecifier setProperty:@YES forKey:@"enabled"];	
 	[self insertContiguousSpecifiers:@[emptySpecifier, elixirSpecifier] afterSpecifier:[self specifierForID:@"APPLE_ACCOUNT"]];
-
 
 }
 

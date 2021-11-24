@@ -5,6 +5,7 @@
 #import <Preferences/PSListController.h>
 
 
+#define Class(string) NSClassFromString(string)
 #define isCurrentApp(string) [[[NSBundle mainBundle] bundleIdentifier] isEqual : string]
 
 
@@ -24,13 +25,16 @@
 
 @interface AMightyClass : UIView
 @property (nonatomic, strong) UILabel *tweakCount;
-@property (copy, nonatomic) NSString *bundlePath;
-@property (nonatomic, strong) NSArray *directoryContent;
 @property (assign, nonatomic) int elixirTweakCount;
 @end
 
 
-@implementation AMightyClass // fancy way to avoid code duplication, haha thanks Codine. But properties >> iVars
+@implementation AMightyClass { // fancy way to avoid code duplication, haha thanks Codine.
+
+	NSString *bundlePath;
+	NSArray *directoryContent;
+
+}
 
 
 + (AMightyClass *)sharedInstance {
@@ -40,7 +44,7 @@
 
 	dispatch_once(&onceToken, ^{
 
-		sharedInstance = [AMightyClass new];
+		sharedInstance = [self new];
 
 	});
 
@@ -49,17 +53,21 @@
 }
 
 
-- (instancetype)init {
+- (id)init {
 
 	self = [super init];
 
-	NSFileManager *fileM = [NSFileManager defaultManager];
+	if(self) {
 
-	self.bundlePath = @"/Library/PreferenceLoader/Preferences";
-	self.directoryContent = [fileM contentsOfDirectoryAtPath:self.bundlePath error:nil];
-	self.elixirTweakCount = [self.directoryContent count];
+		NSFileManager *fileM = [NSFileManager defaultManager];
 
-	[self setupElixirLabel];
+		bundlePath = @"/Library/PreferenceLoader/Preferences";
+		directoryContent = [fileM contentsOfDirectoryAtPath:bundlePath error:nil];
+		self.elixirTweakCount = [directoryContent count];
+
+		[self setupElixirLabel];
+
+	}
 
 	return self;
 
@@ -71,6 +79,7 @@
 	self.tweakCount = [UILabel new];
 	self.tweakCount.text = [NSString stringWithFormat:@"%d", self.elixirTweakCount];
 	self.tweakCount.font = [UIFont boldSystemFontOfSize:18];
+	self.tweakCount.textColor = UIColor.labelColor;
 	self.tweakCount.translatesAutoresizingMaskIntoConstraints = NO;
 
 }
@@ -79,15 +88,15 @@
 @end
 
 
-void(*origDidMoveToWindow)(UITableView *self, SEL _cmd);
+void(*origDMTW)(UITableView *self, SEL _cmd);
 
-void newDidMoveToWindow(UITableView *self, SEL _cmd) {
+void overrideDMTW(UITableView *self, SEL _cmd) {
 
-	origDidMoveToWindow(self, _cmd);
+	origDMTW(self, _cmd);
 
 	UIViewController *ancestor = [self _viewControllerForAncestor];
 
-	if([ancestor isKindOfClass:NSClassFromString(@"OrionTweakSpecifiersController")]) {
+	if([ancestor isKindOfClass:Class(@"OrionTweakSpecifiersController")]) {
 
 		[self addSubview:[AMightyClass sharedInstance].tweakCount];
 
@@ -100,7 +109,7 @@ void newDidMoveToWindow(UITableView *self, SEL _cmd) {
 
 	}
 
-	else if([ancestor isKindOfClass:NSClassFromString(@"TweakPreferencesListController")]) { // Shuffle has a search bar so no space at the top :thishowitis:
+	else if([ancestor isKindOfClass:Class(@"TweakPreferencesListController")]) { // Shuffle has a search bar so no space at the top :thishowitis:
 
 		UIView *footerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, UIScreen.mainScreen.bounds.size.width, 10)];
 		[footerView addSubview:[AMightyClass sharedInstance].tweakCount];
@@ -114,29 +123,11 @@ void newDidMoveToWindow(UITableView *self, SEL _cmd) {
 
 }
 
+void(*origTSVDL)(TSRootListController *self, SEL _cmd);
 
-void (*origTraitCollection)(UIView *self, SEL _cmd, UITraitCollection *);
+void overrideTSVDL(TSRootListController *self, SEL _cmd) {
 
-void newTraitCollection(UIView *self, SEL _cmd, UITraitCollection *previousTraitCollection) {
-
-	origTraitCollection(self, _cmd, previousTraitCollection);
-
-	if(self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark)
-
-		[AMightyClass sharedInstance].tweakCount.textColor = UIColor.whiteColor;
-
-	else
-
-		[AMightyClass sharedInstance].tweakCount.textColor = UIColor.blackColor;
-
-}
-
-
-void(*origViewDidLoad)(TSRootListController *self, SEL _cmd);
-
-void overrideViewDidLoad(TSRootListController *self, SEL _cmd) {
-
-	origViewDidLoad(self, _cmd);
+	origTSVDL(self, _cmd);
 
 	if(!(isCurrentApp(@"com.creaturecoding.tweaksettings"))) return;
 
@@ -157,19 +148,17 @@ void overrideVDL(PSUIPrefsListController *self, SEL _cmd) {
 	[elixirSpecifier setProperty:@YES forKey:@"enabled"];
 	[self insertContiguousSpecifiers:@[emptySpecifier, elixirSpecifier] afterSpecifier:[self specifierForID:@"APPLE_ACCOUNT"]];
 
-
 }
 
 
 __attribute__((constructor)) static void init() {
 
-	MSHookMessageEx(NSClassFromString(@"UITableView"), @selector(traitCollectionDidChange:), (IMP) &newTraitCollection, (IMP*) &origTraitCollection);
-	MSHookMessageEx(NSClassFromString(@"TSRootListController"), @selector(viewDidLoad), (IMP) &overrideViewDidLoad, (IMP*) &origViewDidLoad);
+	MSHookMessageEx(Class(@"TSRootListController"), @selector(viewDidLoad), (IMP) &overrideTSVDL, (IMP *) &origTSVDL);
 
 	if(dlopen("/Library/MobileSubstrate/DynamicLibraries/OrionSettings.dylib", RTLD_LAZY) != NULL || dlopen("/Library/MobileSubstrate/DynamicLibraries/shuffle.dylib", RTLD_LAZY) != NULL)
 
-		MSHookMessageEx(NSClassFromString(@"UITableView"), @selector(didMoveToWindow), (IMP) &newDidMoveToWindow, (IMP*) &origDidMoveToWindow);
+		MSHookMessageEx(Class(@"UITableView"), @selector(didMoveToWindow), (IMP) &overrideDMTW, (IMP *) &origDMTW);
 
-	else MSHookMessageEx(NSClassFromString(@"PSUIPrefsListController"), @selector(viewDidLoad), (IMP) &overrideVDL, (IMP*) &origVDL);
+	else MSHookMessageEx(Class(@"PSUIPrefsListController"), @selector(viewDidLoad), (IMP) &overrideVDL, (IMP *) &origVDL);
 
 }
