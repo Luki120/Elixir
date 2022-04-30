@@ -2,7 +2,7 @@ Package: me.luki.elixir
 Name: Elixir
 Version: 2.0
 Architecture: iphoneos-arm
-Description: Tweak count at a glimpse!
+Description: Tweak count at a glimpse
 Maintainer: Luki
 Author: Luki
 Section: Tweaks
