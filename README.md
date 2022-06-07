@@ -6,7 +6,7 @@
 
 * Supports Orion, Shuffle & TweakSettings app.
 
-## Socials:
+## Socials
 
 * [Twitter](https://twitter.com/Lukii120)
 
